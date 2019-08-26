@@ -1,0 +1,78 @@
+from ic import aws
+from . import assets
+
+@resource
+def brick(repository, oauth_token):
+    amplify_role = _amplify_role()
+
+    amplify_app = _amplify_app(repository=repository, oauth_token=oauth_token, iam_service_role=amplify_role["arn"])
+    amplify_app.require(amplify_role)
+
+    amplify_branch = _amplify_branch(app_id=amplify_app["app_id"])
+    amplify_branch.require(amplify_app)
+
+    return dict(
+        amplify_role_arn=amplify_role["arn"],
+        amplify_app_arn=amplify_app["arn"],
+        amplify_branch_arn=amplify_branch["arn"],
+    )
+
+def _amplify_role():
+    assume_role_policy_document = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": [
+                    "amplify.amazonaws.com"
+                    ]
+                },
+                "Action": [
+                    "sts:AssumeRole"
+                ]
+            }
+        ]
+    }
+
+    policy_document = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": "amplify:*",
+                "Resource": "*"
+            }
+        ]
+    }
+
+    return aws.iam.role(
+        "amplify_role",
+        assume_role_policy_document=assume_role_policy_document,
+        policies=[dict(policy_name="Amplify", policy_document=policy_document)]
+    )
+
+def _amplify_app(repository, oauth_token, iam_service_role):
+    build_spec = assets["amplify_build_spec.yaml"].text
+
+    return aws.amplify.app(
+        "amplify_app",
+        name="TodoApp",
+        repository=repository,
+        description="VueJS Todo example app",
+        oauth_token=oauth_token,
+        build_spec=build_spec,
+        custom_rules=[dict(source="/dist/vue.min.js", target="/vue.min.js", status="200")],
+        tags=[dict(key="Name", value="Todo")],
+        iam_service_role=iam_service_role
+    )
+
+def _amplify_branch(app_id):
+    return aws.amplify.branch(
+        "amplify_branch",
+        branch_name="master",
+        app_id=app_id,
+        description="Master Branch",
+        enable_auto_build=True,
+        tags=[dict(key="Name", value="todo-master"), dict(key="Branch", value="master")]
+    )

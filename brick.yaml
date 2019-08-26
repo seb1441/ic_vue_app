@@ -1,0 +1,6 @@
+name: seb1441.vue_app
+version: v0.1.0
+license: MIT
+main: :brick
+assets:
+- amplify_build_spec.yaml
